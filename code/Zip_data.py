@@ -41,5 +41,4 @@ def down_folder(path):
 
 
 if __name__ == '__main__':
-    Unzip_class(r'..\Reg_Data.zip',r'..')
     xxx = 1
