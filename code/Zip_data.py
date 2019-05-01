@@ -32,7 +32,8 @@ def down_folder(path):
     dirs = []
     for root, dirs, files in os.walk(path):
         break
-    for file in files:
+    for i, file in enumerate(files):
+        print(str(i/len(files) * 100) + '% done')
         if file.find('.zip') != -1:
             print(os.path.join(root,file))
             unzip_file(os.path.join(root,file),root)
