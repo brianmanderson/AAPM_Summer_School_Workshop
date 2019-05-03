@@ -4,3 +4,5 @@ This code is adapated from the voxelmorph code (https://github.com/voxelmorph/vo
 The purpose of this work is to create a simple way to visualize deep learning architectures and learn how to best train a model
 
 Please use the jupyter notebook as a medium of navigating this code during the school
+
+For google colab please go to https://drive.google.com/open?id=1oFxTLOPF46IQljQYH0UFPg59nIvwInrY
