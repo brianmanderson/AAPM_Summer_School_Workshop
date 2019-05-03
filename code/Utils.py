@@ -1,9 +1,10 @@
 import matplotlib.pyplot as plt
-import os
+import os, glob, copy
 # third-party imports
 import tensorflow as tf
 from keras.optimizers import Adam
 from keras.callbacks import ModelCheckpoint, TensorBoard
+from keras.utils import Sequence
 import keras.backend as K
 import Network_Building
 import losses
@@ -11,6 +12,56 @@ import numpy as np
 import skimage.measure
 from PIL import Image
 import io
+
+
+
+class data_generator(Sequence):
+    def __init__(self,atlas_volume, path, batch_size=1, lower_threshold=-75, upper_threshold=100):
+        self.atlas = atlas_volume
+        self.volume_shape = atlas_volume.shape[1:-1]
+        self.path = path
+        self.batch_size = batch_size
+        self.lower = lower_threshold
+        self.upper = upper_threshold
+        self.get_training_data()
+        self.shuffle()
+
+    def get_training_data(self):
+        self.train_vol_names = glob.glob(os.path.join(self.path, '*Registered_Data.npy'))
+
+    def shuffle(self):
+        self.load_file_list = copy.deepcopy(self.train_vol_names)
+        perm = np.arange(len(self.train_vol_names))
+        np.random.shuffle(perm)
+        self.load_file_list = list(np.asarray(self.load_file_list)[perm])
+
+    def __getitem__(self, item):
+        z_max = self.atlas.shape[1]
+        X = np.load(self.load_file_list[item])
+        while X.shape[2] > self.atlas.shape[2]:
+            X = skimage.measure.block_reduce(X, (1, 2, 2, 2, 1), np.average)
+        if X.shape[1] > int(z_max):
+            X = X[:,-z_max:,...]
+        holder = self.atlas.shape - np.asarray(X.shape)
+        val_differences = [[i,0] for i in holder]
+        if np.max(val_differences) > 0:
+            X = np.pad(X, val_differences, 'constant', constant_values=(-1000))
+        X = self.normalize(X)
+        zeros = np.zeros((self.batch_size, *self.volume_shape, len(self.volume_shape)))
+        return ([X, self.atlas], [self.atlas, zeros])
+
+    def on_epoch_end(self):
+        self.shuffle()
+
+    def __len__(self):
+        return len(self.load_file_list)
+
+
+    def normalize(self, X):
+        X[X<self.lower] = self.lower
+        X[X > self.upper] = self.upper
+        X = (X - self.lower)/(self.upper - self.lower)
+        return X
 
 
 def normalize(X, lower, upper):
@@ -80,7 +131,7 @@ class TensorBoardImage(TensorBoard):
         self.data_generator = data_generator
         if self.data_generator:
             x,_ = self.data_generator.__getitem__(0)
-            _, self.rows, self.cols, _ = x.shape
+            self.images, self.rows, self.cols = x[0].shape[1], x[0].shape[2], x[0].shape[3]
         self.log_dir = log_dir
         self.histogram_freq = histogram_freq
         self.merged = None
@@ -205,23 +256,23 @@ class TensorBoardImage(TensorBoard):
     def add_images(self, epoch):
         # Load image
         self.data_generator.shuffle()
-        num_images = min([3,len(self.data_generator)])
-        out_image, out_mask, out_pred = np.zeros([self.rows, int(self.cols*num_images+50*(num_images-1))]), \
-                                        np.zeros([self.rows, int(self.cols * num_images + 50 * (num_images - 1))]), \
-                                        np.zeros([self.rows, int(self.cols * num_images + 50 * (num_images - 1))])
+        num_images = min([5,len(self.data_generator)])
+        out_atlas, out_moving, out_deformed = np.ones([self.rows, int(self.cols*num_images+50*(num_images-1))]), \
+                                        np.ones([self.rows, int(self.cols * num_images + 50 * (num_images - 1))]), \
+                                        np.ones([self.rows, int(self.cols * num_images + 50 * (num_images - 1))])
         step = self.cols
         for i in range(num_images):
             start = int(50*i)
-            x,y = self.data_generator.__getitem__(i)
-            pred = self.model.predict_on_batch(x)
-            out_image[:,step*i + start:step*(i+1)+start] = x[0,...,-1]
-            out_mask[:, step * i + start:step * (i + 1) + start] = y[0, ..., -1]
-            out_pred[:, step * i + start:step * (i + 1) + start] = pred[0, ..., -1]
-        summary = tf.Summary(value=[tf.Summary.Value(tag=self.tag+'_image', image=self.make_image(out_image))])
+            inputs, _ = self.data_generator.__getitem__(i)
+            pred = self.model.predict_on_batch(inputs)[0]
+            out_atlas[:,step*i + start:step*(i+1)+start] = inputs[0][0,int(self.images/2),...,0]
+            out_moving[:, step * i + start:step * (i + 1) + start] = inputs[1][0,int(self.images/2),...,0]
+            out_deformed[:, step * i + start:step * (i + 1) + start] = pred[0,int(self.images/2),...,0]
+        summary = tf.Summary(value=[tf.Summary.Value(tag=self.tag+'Atlas', image=self.make_image(out_atlas))])
         self.writer.add_summary(summary, epoch)
-        summary = tf.Summary(value=[tf.Summary.Value(tag=self.tag+'_mask', image=self.make_image(out_mask))])
+        summary = tf.Summary(value=[tf.Summary.Value(tag=self.tag+'Moving', image=self.make_image(out_moving))])
         self.writer.add_summary(summary, epoch)
-        summary = tf.Summary(value=[tf.Summary.Value(tag=self.tag+'_prediction', image=self.make_image(out_pred))])
+        summary = tf.Summary(value=[tf.Summary.Value(tag=self.tag+'Deformed', image=self.make_image(out_deformed))])
         self.writer.add_summary(summary, epoch)
         return None
 
@@ -242,7 +293,7 @@ def visualize_model(layers, vol_size, model_desc):
     return None
 
 
-def create_model(layers, vol_size, model_desc, batch_norm=False):
+def create_model(layers, vol_size, model_desc, batch_norm=False, data_generator=None):
     model_dir = os.path.join('..', 'models')
     K.clear_session()
     model_class = Network_Building.new_model(image_size=vol_size,layers=layers,
@@ -251,8 +302,8 @@ def create_model(layers, vol_size, model_desc, batch_norm=False):
     tensorboard_output = os.path.join('..','Tensorboard_models',model_desc)
     if not os.path.exists(tensorboard_output):
         os.makedirs(tensorboard_output)
-    tensorboard = TensorBoard(log_dir=tensorboard_output, batch_size=2, write_graph=True, write_grads=False,
-                              write_images=True, update_freq='epoch', histogram_freq=0)
+    tensorboard = TensorBoardImage(log_dir=tensorboard_output, batch_size=2, write_graph=True, write_grads=False,
+                              write_images=True, update_freq='epoch', histogram_freq=0, data_generator=data_generator)
     model_output = os.path.join(model_dir, model_desc, 'Model_saves')
     if not os.path.exists(model_output):
         os.makedirs(model_output)
@@ -274,7 +325,7 @@ def train(model, train_generator, callbacks, learning_rate, number_of_epochs,
     model.fit_generator(train_generator,initial_epoch=0,epochs=number_of_epochs,
                         callbacks=callbacks,steps_per_epoch=steps_per_epoch,verbose=1)
 
-def load_atlas(atlas_file):
+def load_atlas(atlas_file, reduction_factor=1):
     atlas_vol = np.load(atlas_file) #['vol'][np.newaxis, ..., np.newaxis]
     z_max = 64
     atlas_vol = skimage.measure.block_reduce(atlas_vol,(1, 2, 2, 2, 1), np.average)
