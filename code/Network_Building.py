@@ -71,6 +71,7 @@ class UNet_Core():
             for i in range(len(all_filters)):
                 self.desc = layer + '_Decoding_Conv' + str(i)
                 x = self.conv_block(all_filters[i], x)
+            self.layer += 1
         model = Model(inputs=[atlas, moving], outputs=x)
         self.created_model = model
 

@@ -72,10 +72,24 @@ def normalize(X, lower, upper):
 
 
 def plot_scroll_Image(x):
+    '''
+    :param x: input to view of form [rows, columns, # images]
+    :return:
+    '''
+    if x.dtype not in ['float32','float64']:
+        x = copy.deepcopy(x).astype('float32')
+    if len(x.shape) > 3:
+        x = np.squeeze(x)
+    if len(x.shape) == 3:
+        if x.shape[0] != x.shape[1]:
+            x = np.transpose(x,[1,2,0])
     fig, ax = plt.subplots(1, 1)
-    tracker = IndexTracker(ax, x.astype('float32'))
+    if len(x.shape) == 2:
+        x = np.expand_dims(x,axis=0)
+    tracker = IndexTracker(ax, x)
     fig.canvas.mpl_connect('scroll_event', tracker.onscroll)
     return fig,tracker
+    #Image is input in the form of [#images,512,512,#channels]
 
 class IndexTracker(object):
     def __init__(self, ax, X):
@@ -101,6 +115,7 @@ class IndexTracker(object):
         self.im.set_data(self.X[:, :, self.ind])
         self.ax.set_ylabel('slice %s' % self.ind)
         self.im.axes.figure.canvas.draw()
+
 
 
 class TensorBoardImage(TensorBoard):
@@ -257,9 +272,9 @@ class TensorBoardImage(TensorBoard):
         # Load image
         self.data_generator.shuffle()
         num_images = min([5,len(self.data_generator)])
-        out_atlas, out_moving, out_deformed = np.ones([self.rows, int(self.cols*num_images+50*(num_images-1))]), \
-                                        np.ones([self.rows, int(self.cols * num_images + 50 * (num_images - 1))]), \
-                                        np.ones([self.rows, int(self.cols * num_images + 50 * (num_images - 1))])
+        out_atlas, out_moving, out_deformed = np.ones([self.rows, int(self.cols*num_images+int(self.cols/10)*(num_images-1))]), \
+                                        np.ones([self.rows, int(self.cols * num_images + int(self.cols/10) * (num_images - 1))]), \
+                                        np.ones([self.rows, int(self.cols * num_images + int(self.cols/10) * (num_images - 1))])
         step = self.cols
         for i in range(num_images):
             start = int(50*i)
