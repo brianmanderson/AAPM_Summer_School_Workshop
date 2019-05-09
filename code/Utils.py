@@ -50,7 +50,7 @@ class data_generator(Sequence):
             X = np.pad(X, val_differences, 'constant', constant_values=(-1000))
         X = self.normalize(X)
         zeros = np.zeros((self.batch_size, *self.volume_shape, len(self.volume_shape)))
-        return ([X, self.atlas], [self.atlas, zeros])
+        return ([self.atlas, X], [self.atlas, zeros])
 
     def on_epoch_end(self):
         self.shuffle()
