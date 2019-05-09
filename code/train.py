@@ -11,8 +11,8 @@ if not os.path.exists(data_dir):
     print('Finished unzipping')
 model_dir = os.path.join('..','models')
 
-atlas_file= os.path.join('..','reg_data','Atlas_Data.npy')
-atlas_vol = load_atlas(atlas_file)
+atlas_file= os.path.join('..','Reg_Data','Atlas_Data.npy')
+atlas_vol = load_atlas(atlas_file, reduction_factor=2)
 
 layers = {'Layer_0':{'Encoding':[16,32],'Decoding':[32,16,8]},
           'Base':{'Encoding':[64]}}
@@ -22,11 +22,7 @@ model_desc = 'Shallow_net' # Name of your model
 train_generator = data_generator(atlas_vol,data_dir)
 print('We have ' + str(len(train_generator)) + ' registrations available')
 Moving_names = glob.glob(r'K:\Morfeus\AAPM_SummerSchool\voxelmorph_all_data\*Moving_Data.npy')
-for name in Moving_names:
-    data = np.load(name)
-    data[data>100] = 100
-    data[data<-50] = -50
-    xxx = 1
+x,y = train_generator.__getitem__(0)
 learning_rate = 0.001 # Rate at which our gradients will change during each back propogation, typically in range of 1e-2 to 1e-5
 number_of_epochs = 10 # The number of epochs to be trained, one epoch means that you have seen the entirety of your dataset
                       # However, since we defined steps per epoch this might not apply

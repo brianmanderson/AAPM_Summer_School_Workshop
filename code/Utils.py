@@ -38,10 +38,12 @@ class data_generator(Sequence):
     def __getitem__(self, item):
         z_max = self.atlas.shape[1]
         X = np.load(self.load_file_list[item])
-        while X.shape[2] > self.atlas.shape[2]:
+        if X.shape[2] > self.atlas.shape[2]:
             X = skimage.measure.block_reduce(X, (1, 2, 2, 2, 1), np.average)
         if X.shape[1] > int(z_max):
             X = X[:,-z_max:,...]
+        while X.shape[2] > self.atlas.shape[2]:
+            X = skimage.measure.block_reduce(X, (1, 2, 2, 2, 1), np.average)
         holder = self.atlas.shape - np.asarray(X.shape)
         val_differences = [[i,0] for i in holder]
         if np.max(val_differences) > 0:
@@ -342,13 +344,21 @@ def train(model, train_generator, callbacks, learning_rate, number_of_epochs,
 
 def load_atlas(atlas_file, reduction_factor=1):
     atlas_vol = np.load(atlas_file) #['vol'][np.newaxis, ..., np.newaxis]
-    z_max = 64
-    atlas_vol = skimage.measure.block_reduce(atlas_vol,(1, 2, 2, 2, 1), np.average)
+    z_max = 128
+    out_size = 512
+    if reduction_factor > 0:
+        atlas_vol = skimage.measure.block_reduce(atlas_vol,(1, 2, 2, 2, 1), np.average)
+        reduction_factor -= 1
+        z_max //= 2
+        out_size //= 2
     if atlas_vol.shape[1] > z_max:
         atlas_vol = atlas_vol[:, -z_max:, ...]
-    holder = (1,z_max,256,256,1) - np.asarray(atlas_vol.shape)
+    holder = (1,z_max,out_size,out_size,1) - np.asarray(atlas_vol.shape)
     val_differences = [[i,0] for i in holder]
-    atlas_vol = np.pad(atlas_vol, val_differences, 'constant', constant_values=(-1000))
+    if np.max(val_differences) > 0:
+        atlas_vol = np.pad(atlas_vol, val_differences, 'constant', constant_values=(-1000))
+    for i in range(reduction_factor):
+        atlas_vol = skimage.measure.block_reduce(atlas_vol, (1, 2, 2, 2, 1), np.average)
     lower_threshold, upper_threshold = -75, 100
     atlas_vol = normalize(atlas_vol, lower_threshold, upper_threshold)
     return atlas_vol
