@@ -92,7 +92,7 @@ class new_model(object):
                       kernel_initializer=RandomNormal(mean=0.0, stddev=1e-5))(x)
 
         # warp the source with the flow
-        y = nrn_layers.SpatialTransformer(interp_method='linear', indexing=self.indexing)([Atlas, flow])
+        y = nrn_layers.SpatialTransformer(interp_method='linear', indexing=self.indexing)([Moving, flow])
         # prepare model
         self.model = Model(inputs=[Atlas, Moving], outputs=[y, flow])
 

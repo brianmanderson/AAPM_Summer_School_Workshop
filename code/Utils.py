@@ -274,12 +274,13 @@ class TensorBoardImage(TensorBoard):
         # Load image
         self.data_generator.shuffle()
         num_images = min([5,len(self.data_generator)])
-        out_atlas, out_moving, out_deformed = np.ones([self.rows, int(self.cols*num_images+int(self.cols/10)*(num_images-1))]), \
-                                        np.ones([self.rows, int(self.cols * num_images + int(self.cols/10) * (num_images - 1))]), \
-                                        np.ones([self.rows, int(self.cols * num_images + int(self.cols/10) * (num_images - 1))])
+        gap = int(self.cols/10)
+        out_atlas, out_moving, out_deformed = np.ones([self.rows, int(self.cols*num_images+gap*(num_images-1))]), \
+                                        np.ones([self.rows, int(self.cols * num_images + gap * (num_images - 1))]), \
+                                        np.ones([self.rows, int(self.cols * num_images + gap * (num_images - 1))])
         step = self.cols
         for i in range(num_images):
-            start = int(50*i)
+            start = int(gap*i)
             inputs, _ = self.data_generator.__getitem__(i)
             pred = self.model.predict_on_batch(inputs)[0]
             out_atlas[:,step*i + start:step*(i+1)+start] = inputs[0][0,int(self.images/2),...,0]
